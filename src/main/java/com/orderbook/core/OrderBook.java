@@ -1,12 +1,14 @@
 package com.orderbook.core;
 
-import com.orderbook.util.PricePoint;
-
-import java.util.List;
+import java.util.Map;
 
 public interface OrderBook {
+    void getOrderBook();
+    void getAllAsk();
+    void getAllBid();
+    Map.Entry<Double, Integer> getSellAtLevel(int level);
+    Map.Entry<Double, Integer> getBuyAtLevel(int level);
     void addNewOrder(double price, int qty, boolean isBuy);
-    List<PricePoint<Double, Integer>> getMatchedOrder();
-    void printOrderBook();
-    void printMatchedOrders();
+    void getMatchedOrders();
+    void clearOrderBook();
    }

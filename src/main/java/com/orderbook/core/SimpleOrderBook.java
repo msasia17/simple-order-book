@@ -1,41 +1,37 @@
 package com.orderbook.core;
 
-import com.orderbook.util.PricePoint;
-
+import com.orderbook.util.MatchedOrder;
 import java.util.*;
-import java.util.logging.Logger;
 
 public class SimpleOrderBook implements OrderBook {
-    private static final Logger LOGGER = Logger.getLogger( SimpleOrderBook.class.getName() );
+   // private static final Logger LOGGER = Logger.getLogger( SimpleOrderBook.class.getName() );
 
     private Map<Double, Integer> buyOrders;
     private Map<Double, Integer> sellOrders;
-    private List<PricePoint<Double, Integer>> matchedOrders;
+    private List<MatchedOrder> matchedOrders;
 
     public SimpleOrderBook(){
-        sellOrders = new TreeMap<>(); //TreeMap to sort
-        buyOrders = new TreeMap<>(new Comparator<Double>() {  //To reverse sort for bids
-            @Override
-            public int compare(Double o1, Double o2) {
-                return o2.compareTo(o1);
-            }
-        });
+        sellOrders = new TreeMap<>();
+        buyOrders = new TreeMap<>(Comparator.reverseOrder());
         matchedOrders = new ArrayList<>();
     }
 
     @Override
     public void addNewOrder(double price, int qty, boolean isBuy) {
         if (isBuy) {
-            Set<Double> ask_prices = sellOrders.keySet();
-            List<Double> ask_prices_list = new ArrayList<>(ask_prices);
-            for (double ask_price : ask_prices_list) {
-                if (qty > 0 && price >= ask_price) {
-                    int ask_quantity = sellOrders.get(ask_price);
+            List<Double> sell_side_prices = new ArrayList<>(sellOrders.keySet());
+            for (double sell_price : sell_side_prices) {
+                if (qty > 0 && price >= sell_price) {
+                    int ask_quantity = sellOrders.get(sell_price);
                     if (qty >= ask_quantity) {
                         qty = qty - ask_quantity;
-                        removeSellOrder(ask_price, ask_quantity);
+                        MatchedOrder matched_order = new MatchedOrder(sell_price, ask_quantity);
+                        matchedOrders.add(matched_order);
+                        removeSellOrder(sell_price, ask_quantity);
                     } else {
-                        removeSellOrder(ask_price, qty);
+                        MatchedOrder matched_order = new MatchedOrder(sell_price, qty);
+                        matchedOrders.add(matched_order);
+                        removeSellOrder(sell_price, qty);
                         qty = 0;
                     }
                 }
@@ -45,16 +41,19 @@ public class SimpleOrderBook implements OrderBook {
             }
 
         } else {
-            Set<Double> bid_prices = buyOrders.keySet();
-            List<Double> bid_prices_list = new ArrayList<>(bid_prices);
-            for (double bid_price : bid_prices_list) {
-                if (qty > 0 && price <= bid_price) {
-                    int bid_quantity = buyOrders.get(bid_price);
+            List<Double> buy_side_prices = new ArrayList<>(buyOrders.keySet());
+            for (double buy_price : buy_side_prices) {
+                if (qty > 0 && price <= buy_price) {
+                    int bid_quantity = buyOrders.get(buy_price);
                     if (qty >= bid_quantity) {
                         qty = qty - bid_quantity;
-				        removeBuyOrder(bid_price, bid_quantity);
+                        MatchedOrder matched_order = new MatchedOrder(buy_price, bid_quantity);
+               			matchedOrders.add(matched_order);
+				        removeBuyOrder(buy_price, bid_quantity);
                     } else {
-                        removeBuyOrder(bid_price, qty);
+                        MatchedOrder matched_order = new MatchedOrder(buy_price, qty);
+                     	matchedOrders.add(matched_order);
+                        removeBuyOrder(buy_price, qty);
                         qty = 0;
                     }
                 }
@@ -68,9 +67,12 @@ public class SimpleOrderBook implements OrderBook {
 
     }
 
-
     public synchronized void addBuyOrder(double price, int quantity) {
         buyOrders.put(price, quantity);
+    }
+
+    public synchronized void addSellOrder(double price, int quantity) {
+        sellOrders.put(price, quantity);
     }
 
     public synchronized void removeBuyOrder(double price, int quantity) {
@@ -82,9 +84,6 @@ public class SimpleOrderBook implements OrderBook {
         }
     }
 
-    public synchronized void addSellOrder(double price, int quantity) {
-        sellOrders.put(price, quantity);
-    }
 
     public synchronized void removeSellOrder(double price, int quantity) {
         int lastQuantity = sellOrders.get(price);
@@ -95,66 +94,45 @@ public class SimpleOrderBook implements OrderBook {
         }
     }
 
-
-
-    @Override
-    public List<PricePoint<Double, Integer>> getMatchedOrder() {
-        return matchedOrders;
-    }
-
-    @Override
-    public void printMatchedOrders() {
-        System.out.println("");
-        System.out.println("____ exec ____ ");
-        matchedOrders.stream().
-                forEach(e->System.out.println(e.getQty()+"@"+e.getPrice()));
-        System.out.println("______________ ");
-    }
-
-    @Override
-    public void printOrderBook() {
-        System.out.println("");
-        Set<Double> bid_prices = buyOrders.keySet();
-        List<Double> bid_prices_list = new ArrayList<>(bid_prices);
-
-        System.out.println("____ bid ____ ");
-        for (Double bid_price : bid_prices_list) {
-            System.out.println(buyOrders.get(bid_price) + " @ " + bid_price);
-        }
-
-        Set<Double> ask_prices = sellOrders.keySet();
-        System.out.println("____ ask ____ ");
-        for (double ask_price : ask_prices) {
-            System.out.println(sellOrders.get(ask_price) + " @ " + ask_price);
-        }
-        System.out.println("_____________ ");
-    }
-
-
-    //Below methods are not functional requirements but added to help unit testing
+     /**
+     * Method to get all buy quantity by passing min value -2^31. This will give all buy orders
+     * @return buy order quantity
+     */
     public int getBuyOrderQty() {
         return getBuyOrderQty(Integer.MIN_VALUE);
     }
 
-    public int getBuyOrderQty(double bestPrice) {
+    /**
+     * Method to get all buy quantity by passing a best price.
+     * @return buy order quantity
+     */
+
+    public int getBuyOrderQty(double bestBid) {
         int bidQuantity = 0;
         for (double price : buyOrders.keySet()) {
-            if (price > bestPrice) {
+            if (price > bestBid) {
                 bidQuantity += buyOrders.get(price);
             }
         }
-
         return bidQuantity;
     }
 
+    /**
+     * Method to get all buy quantity by passing max value 2^31-1. This will give all sell orders
+     * @return sell order quantity
+     */
     public int getSellOrderQuantity() {
         return getSellOrderQuantity(Integer.MAX_VALUE);
     }
 
-    public int getSellOrderQuantity(double bestPrice) {
+    /**
+     * Method to get all sell quantity by passing a best price.
+     * @return sell order quantity
+     */
+    public int getSellOrderQuantity(double bestAsk) {
         int askQuantity = 0;
         for (double price : sellOrders.keySet()) {
-            if (price < bestPrice) {
+            if (price < bestAsk) {
                 askQuantity += sellOrders.get(price);
             }
         }
@@ -169,11 +147,67 @@ public class SimpleOrderBook implements OrderBook {
         return buyOrders.size();
     }
 
+    @Override
+    public void getMatchedOrders() {
+        System.out.println("\n______EXECUTED ORDERS______");
+        matchedOrders.
+                stream()
+                .forEach(System.out::println);
+    }
 
+    @Override
+    public void getOrderBook() {
+        System.out.println("\n______ORDER BOOK______\nside | qty@price");
+        buyOrders.forEach((price, qty)->System.out.println("BID | "+ qty+" @ "+price));
+        sellOrders.forEach((price, qty)->System.out.println("ASK | "+ qty+" @ "+price));
+    }
+
+    @Override
+    public void getAllAsk() {
+        System.out.println("\n______ALL ASK ORDERS______");
+        sellOrders.forEach((price, qty)->System.out.println(qty+" @ "+price));
+    }
+
+    @Override
+    public void getAllBid() {
+        System.out.println("\n______ALL BID ORDERS______");
+        buyOrders.forEach((price, qty)->System.out.println(qty+" @ "+price));
+
+    }
+
+    public void printSellAtLevel(int level) {
+        sellOrders.entrySet().stream()
+                .skip(level-1)
+                .findFirst()
+                .ifPresent(sellOrder->System.out.println("Ask | level-"+level+" | "+sellOrder.getValue()+"@"+sellOrder.getKey()));
+    }
+
+
+    public void printBuyAtLevel(int level) {
+        buyOrders.entrySet().stream()
+                .skip(level-1)
+                .findFirst()
+                .ifPresent(buyOrder->System.out.println("Bid | level-"+level+" | "+buyOrder.getValue()+"@"+buyOrder.getKey()));
+    }
+
+    @Override
+    public Map.Entry<Double, Integer> getBuyAtLevel(int level){
+       return buyOrders.entrySet().stream()
+                .skip(level-1)
+                .findFirst().orElse(null);
+    }
+
+    @Override
+    public Map.Entry<Double, Integer> getSellAtLevel(int level){
+        return sellOrders.entrySet().stream()
+                .skip(level-1)
+                .findFirst().orElse(null);
+    }
+
+
+    @Override
     public void clearOrderBook() {
-        System.out.println("Sell Size = " + sellOrders.size());
-        System.out.println("Buy Size = " + buyOrders.size());
-        System.out.println("Matched orders = " + matchedOrders.size());
+        System.out.println("Clearning order book with pending sell["+sellOrders.size()+"] and buy[" + buyOrders.size()+"] orders");
         sellOrders.clear();
         buyOrders.clear();
         matchedOrders.clear();

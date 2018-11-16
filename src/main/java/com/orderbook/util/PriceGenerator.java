@@ -21,8 +21,8 @@ public class PriceGenerator {
 
 	private double getRandomDoubleAsPrice()
 	{
-		DecimalFormat twoDForm = new DecimalFormat("#.##"); //two decimal precision for this ex.
-		return Double.valueOf(twoDForm.format(Math.random() * 100));
+		DecimalFormat format = new DecimalFormat("#.##"); //two decimal precision for this ex.
+		return Double.valueOf(format.format(Math.random() * 100));
 	}
 	
 	public double nextPrice() {
